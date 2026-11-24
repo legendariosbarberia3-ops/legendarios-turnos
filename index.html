@@ -114,6 +114,31 @@
 
     <div id="mensaje"></div>
     <p class="nota">Legendarios Barbería · Santa Lucía, San Juan</p>
+    <hr style="border-color:#444;margin:25px 0">
+
+<button type="button" onclick="mostrarAdmin()">
+  ACCESO ADMINISTRATIVO
+</button>
+
+<section id="admin" style="display:none;margin-top:25px">
+  <h2 style="color:#e8c84a;text-align:center">ADMINISTRACIÓN</h2>
+
+  <label for="adminPin">PIN de administrador</label>
+  <input id="adminPin" type="password" placeholder="Ingresá tu PIN">
+
+  <button type="button" onclick="ingresarAdmin()">INGRESAR</button>
+
+  <div id="panelAdmin" style="display:none">
+    <label for="fechaAdmin">Fecha de reservas</label>
+    <input type="date" id="fechaAdmin">
+
+    <button type="button" onclick="cargarReservas()">VER RESERVAS</button>
+
+    <div id="listaReservas"></div>
+  </div>
+
+  <div id="mensajeAdmin"></div>
+</section>
   </main>
 
   <script>
@@ -199,6 +224,120 @@
       boton.disabled = false;
       boton.textContent = 'CONFIRMAR TURNO';
     });
+    let pinAdministrador = '';
+
+function mostrarAdmin() {
+  document.getElementById('admin').style.display = 'block';
+}
+
+async function ingresarAdmin() {
+  const pin = document.getElementById('adminPin').value;
+  const mensajeAdmin = document.getElementById('mensajeAdmin');
+
+  mensajeAdmin.textContent = 'Verificando PIN...';
+
+  try {
+    const resultado = await api('adminLogin', { pin });
+
+    if (!resultado.ok) {
+      throw new Error('PIN incorrecto.');
+    }
+
+    pinAdministrador = pin;
+    document.getElementById('panelAdmin').style.display = 'block';
+
+    const hoy = new Date();
+    const fechaLocal = new Date(
+      hoy.getTime() - hoy.getTimezoneOffset() * 60000
+    ).toISOString().slice(0, 10);
+
+    document.getElementById('fechaAdmin').value = fechaLocal;
+    mensajeAdmin.textContent = '¡Acceso autorizado!';
+    await cargarReservas();
+
+  } catch (error) {
+    pinAdministrador = '';
+    mensajeAdmin.textContent = error.message || 'No se pudo ingresar.';
+  }
+}
+
+async function cargarReservas() {
+  const lista = document.getElementById('listaReservas');
+  const fecha = document.getElementById('fechaAdmin').value;
+
+  lista.textContent = 'Cargando reservas...';
+
+  try {
+    const reservas = await api('adminBookings', {
+      pin: pinAdministrador,
+      fecha: fecha
+    });
+
+    lista.replaceChildren();
+
+    if (!reservas.length) {
+      lista.textContent = 'No hay reservas para esta fecha.';
+      return;
+    }
+
+    reservas.forEach(reserva => {
+      const tarjeta = document.createElement('div');
+      tarjeta.style.cssText =
+        'background:#101010;border:1px solid #444;border-radius:10px;padding:14px;margin-top:12px';
+
+      const titulo = document.createElement('h3');
+      titulo.style.color = '#e8c84a';
+      titulo.textContent = reserva.time + ' · ' + reserva.barber;
+
+      const detalle = document.createElement('p');
+      detalle.style.lineHeight = '1.7';
+      detalle.textContent =
+        reserva.name + ' | ' + reserva.phone +
+        ' | ' + reserva.service +
+        ' | $' + reserva.price +
+        ' | ' + reserva.status;
+
+      tarjeta.append(titulo, detalle);
+
+      if (reserva.status === 'Confirmado') {
+        const atendido = document.createElement('button');
+        atendido.textContent = 'MARCAR ATENDIDO';
+        atendido.onclick = () => cambiarEstado(reserva.id, 'Atendido');
+
+        const cancelar = document.createElement('button');
+        cancelar.textContent = 'CANCELAR TURNO';
+        cancelar.style.background = '#555';
+        cancelar.style.color = 'white';
+        cancelar.onclick = () => cambiarEstado(reserva.id, 'Cancelado');
+
+        tarjeta.append(atendido, cancelar);
+      }
+
+      lista.appendChild(tarjeta);
+    });
+
+  } catch (error) {
+    lista.textContent = error.message || 'Error al cargar las reservas.';
+  }
+}
+
+async function cambiarEstado(id, estado) {
+  if (!confirm('¿Querés cambiar el estado de este turno a ' + estado + '?')) {
+    return;
+  }
+
+  try {
+    await api('adminStatus', {
+      pin: pinAdministrador,
+      id: id,
+      estado: estado
+    });
+
+    await cargarReservas();
+  } catch (error) {
+    alert(error.message || 'No se pudo actualizar el turno.');
+  }
+}
   </script>
 </body>
 </html>

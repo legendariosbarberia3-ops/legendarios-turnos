@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101010">
+  <title>Turnos | Legendarios Barbería</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      background: #101010;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    main {
+      max-width: 520px;
+      margin: 25px auto;
+      padding: 28px 22px;
+      background: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 16px;
+    }
+    h1 {
+      text-align: center;
+      color: #e8c84a;
+      letter-spacing: 3px;
+      margin-bottom: 6px;
+    }
+    .sub {
+      text-align: center;
+      color: #aaa;
+      margin-bottom: 28px;
+    }
+    label {
+      display: block;
+      margin: 17px 0 8px;
+      color: #e8c84a;
+      font-size: 14px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 14px;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+    input, select {
+      background: #101010;
+      color: white;
+      border: 1px solid #444;
+    }
+    button {
+      margin-top: 22px;
+      border: 0;
+      background: #e8c84a;
+      color: #111;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; }
+    #mensaje {
+      margin-top: 18px;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .nota {
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+      margin-top: 25px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>LEGENDARIOS</h1>
+    <p class="sub">BARBERÍA · RESERVÁ TU TURNO</p>
+
+    <form id="reserva">
+      <label for="servicio">Servicio</label>
+      <select id="servicio" required>
+        <option value="">Elegí un servicio</option>
+        <option value="Corte">Corte — $14.000</option>
+        <option value="Barba">Barba — $10.000</option>
+        <option value="Corte + barba">Corte + barba — $18.000</option>
+      </select>
+
+      <label for="barbero">Barbero</label>
+      <select id="barbero" required>
+        <option value="">Elegí tu barbero</option>
+        <option>Luciano</option>
+        <option>Esteban</option>
+        <option>Ramiro</option>
+        <option>Alejo</option>
+      </select>
+
+      <label for="fecha">Fecha</label>
+      <input id="fecha" type="date" required>
+
+      <label for="hora">Horario disponible</label>
+      <select id="hora" required>
+        <option value="">Primero elegí servicio, barbero y fecha</option>
+      </select>
+
+      <label for="cliente">Nombre y apellido</label>
+      <input id="cliente" type="text" placeholder="Tu nombre" required>
+
+      <label for="telefono">WhatsApp</label>
+      <input id="telefono" type="tel" placeholder="Tu número de teléfono" required>
+
+      <button id="confirmar" type="submit">CONFIRMAR TURNO</button>
+    </form>
+
+    <div id="mensaje"></div>
+    <p class="nota">Legendarios Barbería · Santa Lucía, San Juan</p>
+  </main>
+
+  <script>
+    const fecha = document.getElementById('fecha');
+    const hora = document.getElementById('hora');
+    const mensaje = document.getElementById('mensaje');
+    const boton = document.getElementById('confirmar');
+
+    fecha.min = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10);
+
+    async function consultarHorarios() {
+      const servicio = document.getElementById('servicio').value;
+      const barbero = document.getElementById('barbero').value;
+      const dia = fecha.value;
+
+      if (!servicio || !barbero || !dia) return;
+
+      hora.innerHTML = '<option value="">Consultando horarios...</option>';
+
+      try {
+        const resultado = await api('slots', {
+          servicio, barbero, fecha: dia
+        });
+
+        hora.innerHTML = '<option value="">Elegí un horario</option>';
+        resultado.forEach(item => {
+          if (item.available) {
+            const opcion = document.createElement('option');
+            opcion.value = item.time;
+            opcion.textContent = item.time;
+            hora.appendChild(opcion);
+          }
+        });
+
+        if (hora.options.length === 1) {
+          hora.innerHTML = '<option value="">No hay horarios disponibles</option>';
+        }
+      } catch (error) {
+        hora.innerHTML = '<option value="">No se pudieron consultar los horarios</option>';
+      }
+    }
+
+    ['servicio', 'barbero', 'fecha'].forEach(id => {
+      document.getElementById(id).addEventListener('change', consultarHorarios);
+    });
+
+    async function api(accion, datos) {
+      const respuesta = await fetch('/.netlify/functions/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion, datos })
+      });
+
+      if (!respuesta.ok) throw new Error('Error de conexión');
+      const resultado = await respuesta.json();
+      if (resultado.error) throw new Error(resultado.error);
+      return resultado;
+    }
+
+    document.getElementById('reserva').addEventListener('submit', async e => {
+      e.preventDefault();
+      boton.disabled = true;
+      boton.textContent = 'PROCESANDO...';
+      mensaje.textContent = '';
+
+      try {
+        const resultado = await api('reservar', {
+          servicio: document.getElementById('servicio').value,
+          barbero: document.getElementById('barbero').value,
+          fecha: fecha.value,
+          hora: hora.value,
+          cliente: document.getElementById('cliente').value,
+          telefono: document.getElementById('telefono').value
+        });
+
+        mensaje.textContent = resultado.mensaje || 'Solicitud procesada.';
+        if (resultado.ok) e.target.reset();
+      } catch (error) {
+        mensaje.textContent = 'No se pudo completar la reserva. Intentá nuevamente.';
+      }
+
+      boton.disabled = false;
+      boton.textContent = 'CONFIRMAR TURNO';
+    });
+  </script>
+</body>
+</html>

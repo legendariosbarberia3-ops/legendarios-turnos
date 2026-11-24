@@ -190,7 +190,7 @@
           telefono: document.getElementById('telefono').value
         });
 
-        mensaje.textContent = resultado.mensaje || 'Solicitud procesada.';
+       mensaje.textContent = resultado.mensaje || '¡Tu turno está reservado correctamente! 💈';
         if (resultado.ok) e.target.reset();
       } catch (error) {
         mensaje.textContent = 'No se pudo completar la reserva. Intentá nuevamente.';
